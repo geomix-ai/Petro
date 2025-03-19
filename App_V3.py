@@ -136,14 +136,14 @@ def show_input_logs():
             # Fill from log's minimum value to the log value
             fig.add_trace(
                 go.Scatter(
-                    x=[min_val]*len(df.index),
+                    x=[min_val] * len(df.index),
                     y=df.index,
                     mode='lines',
                     line=dict(color='red', width=0),  # Transparent line
                     showlegend=False,
                 ),
                 row=1,
-                col=j+1
+                col=j + 1
             )
 
             fig.add_trace(
@@ -154,17 +154,17 @@ def show_input_logs():
                     name=col,
                     line=dict(color='red', width=1),
                     fill='tonextx',
-                    fillcolor='rgba(255, 0, 0, 0.3)',  # Semi-transparent red fill
+                    fillcolor='rgba(128, 128, 128, 0.3)',  # Semi-transparent grey fill
                 ),
                 row=1,
-                col=j+1
+                col=j + 1
             )
 
             # Update each x-axis with fine grid
             fig.update_xaxes(
                 title_text=col,
                 row=1,
-                col=j+1,
+                col=j + 1,
                 showgrid=True,
                 gridwidth=0.5,
                 gridcolor='gray'
@@ -222,11 +222,22 @@ def fix_logs():
     st.success("✔ Data cleaned successfully!")
     show_input_logs()
 
+    # Save Cleaned Logs with Depth Interval Selection
     if st.button("Save Cleaned Logs"):
-        st.session_state["cleaned_df"] = df
-        st.success("✔ Cleaned logs saved to session state!")
-    else:
-        st.warning("⚠ Cleaned logs not saved!")
+        save_option = st.radio("Save Option", ["Entire Logs", "Specific Depth Interval"])
+
+        if save_option == "Specific Depth Interval":
+            depth_min = st.number_input("Enter Minimum Depth", value=df.index.min())
+            depth_max = st.number_input("Enter Maximum Depth", value=df.index.max())
+            if depth_min >= depth_max:
+                st.error("Minimum depth must be less than maximum depth!")
+            else:
+                cleaned_df = df[(df.index >= depth_min) & (df.index <= depth_max)]
+                st.session_state["cleaned_df"] = cleaned_df
+                st.success(f"✔ Cleaned logs saved for depth interval {depth_min} to {depth_max}!")
+        else:
+            st.session_state["cleaned_df"] = df
+            st.success("✔ Cleaned logs saved for the entire depth range!")
 
 # Select target and input logs for Training
 def select_training_data():
