@@ -53,10 +53,12 @@ if "menu_choice" not in st.session_state:
 # Initialize session state for global variables
 if "dfs" not in st.session_state:
     st.session_state["dfs"] = []
-if "target_log" not in st.session_state:
-    st.session_state["target_log"] = None
+if "cleaned_dfs" not in st.session_state:
+    st.session_state["cleaned_dfs"] = []
+if "target_logs" not in st.session_state:
+    st.session_state["target_logs"] = []
 if "input_logs" not in st.session_state:
-    st.session_state["input_logs"] = None
+    st.session_state["input_logs"] = []
 if "models" not in st.session_state:
     st.session_state["models"] = {
         "Linear Regression": None,
@@ -66,10 +68,8 @@ if "models" not in st.session_state:
         "SVR": None,
         "KNN": None
     }
-if "updated_X" not in st.session_state:
-    st.session_state["updated_X"] = None
-if "cleaned_dfs" not in st.session_state:
-    st.session_state["cleaned_dfs"] = []
+if "average_metrics" not in st.session_state:
+    st.session_state["average_metrics"] = {}
 
 # Home / Introduction Page
 if st.session_state.menu_choice == "Home":
@@ -208,13 +208,13 @@ def fix_logs():
     for i, df in enumerate(st.session_state["dfs"]):
         df.replace(missing_values, np.nan, inplace=True)
         fill_method = st.selectbox(
-            "Choose method to fill missing values", 
+            f"Choose method to fill missing values for Well {i+1}", 
             ["Drop Rows", "Fill with Mean", "Fill with Median", "Interpolate"],
-            key=f"fill_method_selectbox_{i}"  # Unique key for each iteration
+            key=f"fill_method_selectbox_{i}"  # Unique key
         )
 
-        if st.button("Preview Changes", key=f"preview_button_{i}"):  # Unique key for each button
-            st.write("Before Cleaning:")
+        if st.button(f"Preview Changes for Well {i+1}", key=f"preview_button_{i}"):  # Unique key
+            st.write(f"Before Cleaning for Well {i+1}:")
             st.write(df.head())
 
         if fill_method == "Drop Rows":
@@ -232,72 +232,73 @@ def fix_logs():
     st.success("✔ Data cleaned successfully!")
     show_input_logs()
 
-    if st.button("Save Cleaned Logs", key="save_cleaned_logs_button"):  # Unique key
-        st.session_state["cleaned_dfs"] = cleaned_dfs
-        st.success("✔ Cleaned logs saved to session state!")
+    if st.button("Save Cleaned Logs"):
+        for i, df in enumerate(cleaned_dfs):
+            df.to_csv(f"cleaned_well_{i+1}.csv", index=False)
+        st.success("✔ Cleaned logs saved for each well!")
     else:
         st.warning("⚠ Cleaned logs not saved!")
-   
+
 # Select target and input logs for Training
 def select_training_data():
     if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
         st.warning("⚠ No cleaned data available!")
         return
 
-    st.write("### Select Training Data")
-    combined_df = pd.concat(st.session_state["cleaned_dfs"], axis=0)
+    st.write("### Select Training Data for Each Well")
+    st.session_state["target_logs"] = []
+    st.session_state["input_logs"] = []
 
-    st.session_state["target_log"] = st.selectbox(
-        "Select Target Log:", 
-        combined_df.columns,
-        key="target_log_selectbox"  # Unique key
-    )
-    st.session_state["input_logs"] = st.multiselect(
-        "Select Input Logs:", 
-        combined_df.columns,
-        default=[col for col in combined_df.columns if col != st.session_state["target_log"]],
-        key="input_logs_multiselect"  # Unique key
-    )
+    for i, df in enumerate(st.session_state["cleaned_dfs"]):
+        st.subheader(f"Well {i+1}")
+        target_log = st.selectbox(
+            f"Select Target Log for Well {i+1}:", 
+            df.columns,
+            key=f"target_log_selectbox_{i}"  # Unique key
+        )
+        input_logs = st.multiselect(
+            f"Select Input Logs for Well {i+1}:", 
+            df.columns,
+            default=[col for col in df.columns if col != target_log],
+            key=f"input_logs_multiselect_{i}"  # Unique key
+        )
+
+        st.session_state["target_logs"].append(target_log)
+        st.session_state["input_logs"].append(input_logs)
 
     if st.button("Confirm Selection"):
-        if not st.session_state["target_log"] or not st.session_state["input_logs"]:
-            st.warning("⚠ Please select both input and target logs!")
-        else:
-            st.success(f"✔ Logs selected successfully!\nTarget: {st.session_state['target_log']}\nInputs: {st.session_state['input_logs']}")
+        st.success("✔ Logs selected successfully for all wells!")
 
-# Plot histograms of input logs and target log
+# Plot histograms of input logs and target log for each well
 def plot_histograms():
-    if "input_logs" not in st.session_state or "target_log" not in st.session_state:
-        st.warning("⚠ No training data selected!")
-        return
-
-    input_logs = st.session_state["input_logs"]
-    target_log = st.session_state["target_log"]
-
     if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
         st.warning("⚠ No cleaned data available!")
         return
 
-    if input_logs and target_log:
-        st.write("### Histograms")
-        combined_df = pd.concat(st.session_state["cleaned_dfs"], axis=0)
+    if "target_logs" not in st.session_state or "input_logs" not in st.session_state:
+        st.warning("⚠ No logs selected!")
+        return
+
+    for i, df in enumerate(st.session_state["cleaned_dfs"]):
+        st.subheader(f"Well {i+1} Histograms")
+        target_log = st.session_state["target_logs"][i]
+        input_logs = st.session_state["input_logs"][i]
+
         fig, axes = plt.subplots(nrows=1, ncols=len(input_logs) + 1, figsize=(25, 5))
 
-        for i, col in enumerate(input_logs):
-            if col in combined_df.columns:
-                axes[i].hist(combined_df[col].dropna(), bins=30, edgecolor='black')
-                axes[i].set_title(col)
+        for j, col in enumerate(input_logs):
+            if col in df.columns:
+                axes[j].hist(df[col].dropna(), bins=30, edgecolor='black')
+                axes[j].set_title(col)
 
-        if target_log in combined_df.columns:
-            axes[-1].hist(combined_df[target_log].dropna(), bins=30, edgecolor='black', color='red')
+        if target_log in df.columns:
+            axes[-1].hist(df[target_log].dropna(), bins=30, edgecolor='black', color='red')
             axes[-1].set_title(target_log)
 
         plt.tight_layout()
         st.pyplot(fig)
-    else:
-        st.warning("⚠ No data loaded or logs selected!")
 
-# Plot correlation matrix and update X data
+# Plot correlation matrix and selected input logs for each well
 def plot_correlation_matrix():
     if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
         st.warning("⚠ No cleaned data available!")
@@ -307,240 +308,130 @@ def plot_correlation_matrix():
         st.warning("⚠ No logs selected!")
         return
 
-    input_logs = st.session_state["input_logs"]
-    combined_df = pd.concat(st.session_state["cleaned_dfs"], axis=0)
+    for i, df in enumerate(st.session_state["cleaned_dfs"]):
+        st.subheader(f"Well {i+1} Correlation Matrix and Selected Input Logs")
+        input_logs = st.session_state["input_logs"][i]
 
-    if input_logs:
-        st.write("### Correlation Matrix and Selected Input Logs")
-        corr_matrix = combined_df[input_logs].corr()
+        if input_logs:
+            corr_matrix = df[input_logs].corr()
 
-        high_corr = set()
-        for i in range(len(corr_matrix.columns)):
-            for j in range(i):
-                if abs(corr_matrix.iloc[i, j]) > 0.8:
-                    high_corr.add(corr_matrix.columns[i])
+            high_corr = set()
+            for j in range(len(corr_matrix.columns)):
+                for k in range(j):
+                    if abs(corr_matrix.iloc[j, k]) > 0.8:
+                        high_corr.add(corr_matrix.columns[j])
 
-        st.session_state["updated_X"] = combined_df[input_logs].drop(columns=high_corr)
+            st.session_state["updated_X"] = df[input_logs].drop(columns=high_corr)
 
-        fig_corr, ax_corr = plt.subplots(figsize=(6, 4))
-        sns.heatmap(corr_matrix, annot=True, ax=ax_corr, cmap="coolwarm")
-        ax_corr.set_title("Correlation Matrix")
-        st.pyplot(fig_corr)
+            fig_corr, ax_corr = plt.subplots(figsize=(6, 4))
+            sns.heatmap(corr_matrix, annot=True, ax=ax_corr, cmap="coolwarm")
+            ax_corr.set_title("Correlation Matrix")
+            st.pyplot(fig_corr)
 
-        fig, axes = plt.subplots(nrows=1, ncols=len(st.session_state["updated_X"].columns), figsize=(10, 10))
-        for i, col in enumerate(st.session_state["updated_X"].columns):
-            axes[i].plot(st.session_state["updated_X"][col], st.session_state["updated_X"].index, label=col)
-            axes[i].set_ylim(st.session_state["updated_X"].index.max(), st.session_state["updated_X"].index.min())
-            axes[i].set_xlabel(col)
-            axes[i].set_ylabel("Depth")
-            axes[i].grid()
-        plt.tight_layout()
-        st.pyplot(fig)
+            fig, axes = plt.subplots(nrows=1, ncols=len(st.session_state["updated_X"].columns), figsize=(10, 10))
+            for j, col in enumerate(st.session_state["updated_X"].columns):
+                axes[j].plot(st.session_state["updated_X"][col], st.session_state["updated_X"].index, label=col)
+                axes[j].set_ylim(st.session_state["updated_X"].index.max(), st.session_state["updated_X"].index.min())
+                axes[j].set_xlabel(col)
+                axes[j].set_ylabel("Depth")
+                axes[j].grid()
+            plt.tight_layout()
+            st.pyplot(fig)
 
-    else:
-        st.warning("⚠ No logs selected!")
-
-# Train Models and Show Predictions
+# Train Models and Show Predictions for each well
 def train_models_and_show_predictions():
     if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
         st.warning("⚠ No cleaned data available!")
         return
 
-    if "input_logs" not in st.session_state or "target_log" not in st.session_state:
+    if "input_logs" not in st.session_state or "target_logs" not in st.session_state:
         st.warning("⚠ No logs selected!")
         return
 
-    input_logs = st.session_state["input_logs"]
-    target_log = st.session_state["target_log"]
+    model_name = st.selectbox(
+        "Choose Model", 
+        list(st.session_state["models"].keys()),
+        key="model_selectbox"  # Unique key
+    )
 
-    if st.session_state["cleaned_dfs"] and input_logs and target_log:
-        model_name = st.selectbox(
-            "Choose Model", 
-            list(st.session_state["models"].keys()),
-            key="model_selectbox"  # Unique key
-        )
+    # Set Hyperparameters
+    param_grid = {}
+    if model_name == "Linear Regression":
+        model = LinearRegression()
+    elif model_name == "Random Forest":
+        n_estimators = st.slider("Number of Trees", 10, 200, 100, key="rf_n_estimators_slider")
+        max_depth = st.slider("Max Depth", 1, 20, 10, key="rf_max_depth_slider")
+        model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
+        param_grid = {"n_estimators": range(10, 200, 10), "max_depth": range(1, 20)}
+    elif model_name == "Neural Network":
+        hidden_layer_sizes = st.text_input("Hidden Layer Sizes (e.g., 64,64)", "64,64", key="nn_hidden_layer_sizes_input")
+        max_iter = st.slider("Max Iterations", 100, 1000, 100, key="nn_max_iter_slider")
+        model = MLPRegressor(hidden_layer_sizes=tuple(map(int, hidden_layer_sizes.split(','))), max_iter=max_iter, random_state=42)
+        param_grid = {"hidden_layer_sizes": [(64,), (128,), (64, 64), (128, 128)], "max_iter": range(100, 1000, 100)}
+    elif model_name == "XGBoost":
+        learning_rate = st.slider("Learning Rate", 0.01, 0.3, 0.1, key="xgb_learning_rate_slider")
+        n_estimators = st.slider("Number of Trees", 10, 200, 100, key="xgb_n_estimators_slider")
+        max_depth = st.slider("Max Depth", 1, 20, 6, key="xgb_max_depth_slider")
+        model = xgb.XGBRegressor(learning_rate=learning_rate, n_estimators=n_estimators, max_depth=max_depth, random_state=42)
+        param_grid = {
+            "learning_rate": np.linspace(0.01, 0.3, 10),
+            "n_estimators": range(10, 200, 10),
+            "max_depth": range(1, 20)
+        }
+    elif model_name == "SVR":
+        kernel = st.text_input("Kernel (e.g., 'rbf', 'linear')", "rbf", key="svr_kernel_input")
+        C = st.slider("C (Regularization parameter)", 0.1, 10.0, 1.0, key="svr_c_slider")
+        gamma = st.text_input("Gamma (Kernel coefficient)", "scale", key="svr_gamma_input")
+        model = SVR(kernel=kernel, C=C, gamma=gamma)
+        param_grid = {"C": np.linspace(0.1, 10, 10), "gamma": ["scale", "auto"]}
+    elif model_name == "KNN":
+        n_neighbors = st.slider("Number of Neighbors", 1, 20, 5, key="knn_n_neighbors_slider")
+        model = KNeighborsRegressor(n_neighbors=n_neighbors)
+        param_grid = {"n_neighbors": range(1, 20)}
 
-        # Set Hyperparameters
-        param_grid = {}
-        if model_name == "Linear Regression":
-            model = LinearRegression()
-        elif model_name == "Random Forest":
-            n_estimators = st.slider(
-                "Number of Trees", 10, 200, 100, 
-                key="rf_n_estimators_slider"  # Unique key
-            )
-            max_depth = st.slider(
-                "Max Depth", 1, 20, 10, 
-                key="rf_max_depth_slider"  # Unique key
-            )
-            model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
-            param_grid = {"n_estimators": range(10, 200, 10), "max_depth": range(1, 20)}
-        elif model_name == "Neural Network":
-            hidden_layer_sizes = st.text_input(
-                "Hidden Layer Sizes (e.g., 64,64)", 
-                "64,64", 
-                key="nn_hidden_layer_sizes_input"  # Unique key
-            )
-            max_iter = st.slider(
-                "Max Iterations", 100, 1000, 100, 
-                key="nn_max_iter_slider"  # Unique key
-            )
-            model = MLPRegressor(
-                hidden_layer_sizes=tuple(map(int, hidden_layer_sizes.split(','))), 
-                max_iter=max_iter, 
-                random_state=42
-            )
-            param_grid = {
-                "hidden_layer_sizes": [(64,), (128,), (64, 64), (128, 128)], 
-                "max_iter": range(100, 1000, 100)
-            }
-        elif model_name == "XGBoost":
-            learning_rate = st.slider(
-                "Learning Rate", 0.01, 0.3, 0.1, 
-                key="xgb_learning_rate_slider"  # Unique key
-            )
-            n_estimators = st.slider(
-                "Number of Trees", 10, 200, 100, 
-                key="xgb_n_estimators_slider"  # Unique key
-            )
-            max_depth = st.slider(
-                "Max Depth", 1, 20, 6, 
-                key="xgb_max_depth_slider"  # Unique key
-            )
-            model = xgb.XGBRegressor(
-                learning_rate=learning_rate, 
-                n_estimators=n_estimators, 
-                max_depth=max_depth, 
-                random_state=42
-            )
-            param_grid = {
-                "learning_rate": np.linspace(0.01, 0.3, 10),
-                "n_estimators": range(10, 200, 10),
-                "max_depth": range(1, 20)
-            }
-        elif model_name == "SVR":
-            kernel = st.text_input(
-                "Kernel (e.g., 'rbf', 'linear')", 
-                "rbf", 
-                key="svr_kernel_input"  # Unique key
-            )
-            C = st.slider(
-                "C (Regularization parameter)", 0.1, 10.0, 1.0, 
-                key="svr_c_slider"  # Unique key
-            )
-            gamma = st.text_input(
-                "Gamma (Kernel coefficient)", 
-                "scale", 
-                key="svr_gamma_input"  # Unique key
-            )
-            model = SVR(kernel=kernel, C=C, gamma=gamma)
-            param_grid = {"C": np.linspace(0.1, 10, 10), "gamma": ["scale", "auto"]}
-        elif model_name == "KNN":
-            n_neighbors = st.slider(
-                "Number of Neighbors", 1, 20, 5, 
-                key="knn_n_neighbors_slider"  # Unique key
-            )
-            model = KNeighborsRegressor(n_neighbors=n_neighbors)
-            param_grid = {"n_neighbors": range(1, 20)}
+    use_random_search = st.checkbox("Use RandomizedSearchCV for Hyperparameter Tuning", key="use_random_search_checkbox")
 
-        use_random_search = st.checkbox(
-            "Use RandomizedSearchCV for Hyperparameter Tuning", 
-            key="use_random_search_checkbox"  # Unique key
-        )
+    if st.button("Train Model", key="train_model_button"):
+        with st.spinner("Training in progress..."):
+            metrics_data = {"Well": [], "R²": [], "RMSE": []}
+            for i, df in enumerate(st.session_state["cleaned_dfs"]):
+                target_log = st.session_state["target_logs"][i]
+                input_logs = st.session_state["input_logs"][i]
 
-        if st.button("Train Model", key="train_model_button"):  # Unique key
-            with st.spinner("Training in progress..."):
-                combined_df = pd.concat(st.session_state["cleaned_dfs"], axis=0)
-                X = st.session_state["updated_X"].dropna() if st.session_state["updated_X"] is not None else combined_df[input_logs].dropna()
-                y = combined_df[target_log].dropna()
+                X = df[input_logs].dropna()
+                y = df[target_log].dropna()
 
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
                 scaler = StandardScaler()
                 X_train = scaler.fit_transform(X_train)
                 X_test = scaler.transform(X_test)
-                X_scaled = scaler.transform(X)
 
                 if use_random_search and param_grid:
                     search = RandomizedSearchCV(model, param_grid, n_iter=10, cv=3, random_state=42)
                     search.fit(X_train, y_train)
                     model = search.best_estimator_
-                    st.success(f"Best hyperparameters: {search.best_params_}")
+                    st.success(f"Best hyperparameters for Well {i+1}: {search.best_params_}")
                 else:
                     model.fit(X_train, y_train)
 
-                st.session_state["models"][model_name] = model
-                st.success(f"{model_name} trained successfully!")
-
-                # Show Predictions
                 y_pred_train = model.predict(X_train)
                 y_pred_test = model.predict(X_test)
-                y_pred = model.predict(X_scaled)
 
-                # Calculate Metrics
-                metrics_data = {
-                    "Dataset": ["Training", "Testing"],
-                    "R²": [r2_score(y_train, y_pred_train), r2_score(y_test, y_pred_test)],
-                    "RMSE": [np.sqrt(mean_squared_error(y_train, y_pred_train)),
-                             np.sqrt(mean_squared_error(y_test, y_pred_test))]
-                }
-                metrics_df = pd.DataFrame(metrics_data)
+                metrics_data["Well"].append(f"Well {i+1}")
+                metrics_data["R²"].append(r2_score(y_test, y_pred_test))
+                metrics_data["RMSE"].append(np.sqrt(mean_squared_error(y_test, y_pred_test)))
 
-                # Plot Predictions
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=y.index,
-                    y=y.values,
-                    mode='lines',
-                    name='Actual',
-                    line=dict(color='rgba(0, 0, 0, 0.7)', width=2)
-                ))
-                fig.add_trace(go.Scatter(
-                    x=y.index,
-                    y=y_pred,
-                    mode='lines',
-                    name='Predicted',
-                    line=dict(color='rgba(255, 0, 0, 0.7)', width=2)
-                ))
-                # Update layout
-                fig.update_layout(
-                    title=f"{model_name} (R²: {metrics_data['R²'][1]:.2f}, RMSE: {metrics_data['RMSE'][1]:.2f})",
-                    xaxis_title="Depth",
-                    yaxis_title="Values",
-                    legend_title="Legend",
-                    hovermode="x unified",
-                    template="plotly_white"
-                )
+            # Calculate average metrics
+            avg_r2 = np.mean(metrics_data["R²"])
+            avg_rmse = np.mean(metrics_data["RMSE"])
+            st.session_state["average_metrics"][model_name] = {"R²": avg_r2, "RMSE": avg_rmse}
 
-                # Display the plot in Streamlit
-                st.plotly_chart(fig, use_container_width=True)
+            st.success(f"{model_name} trained successfully for all wells!")
+            st.write("### Average Metrics")
+            st.write(f"Average R²: {avg_r2:.2f}")
+            st.write(f"Average RMSE: {avg_rmse:.2f}")
 
-                # Show Metrics Table
-                col1, col2 = st.columns(2)
-                col1.metric("R² (Training)", f"{metrics_data['R²'][0]:.2f}")
-                col2.metric("RMSE (Training)", f"{metrics_data['RMSE'][0]:.2f}")
-
-                col3, col4 = st.columns(2)
-                col3.metric("R² (Testing)", f"{metrics_data['R²'][1]:.2f}")
-                col4.metric("RMSE (Testing)", f"{metrics_data['RMSE'][1]:.2f}")
-
-                # Save Model
-                if st.button("Save Model", key="save_model_button"):  # Unique key
-                    try:
-                        model_path = f"{model_name}_model.pkl"
-                        with open(model_path, "wb") as file:
-                            pickle.dump(model, file)
-                        st.session_state["model_saved"] = True
-                        st.session_state["model_path"] = model_path
-                    except Exception as e:
-                        st.error(f"Error saving model: {e}")
-
-                # Display success message if model is saved
-                if st.session_state.get("model_saved"):
-                    st.success(f"Model saved successfully at: {st.session_state['model_path']}")
-    else:
-        st.warning("⚠ No data or logs selected!")
-
-# Load and predict new data
+# Load and predict new data using average values
 def load_and_predict_new_data():
     uploaded_file = st.file_uploader("Upload new LAS or CSV file", type=["las", "csv"])
     if uploaded_file:
@@ -559,9 +450,9 @@ def load_and_predict_new_data():
             X_new_scaled = StandardScaler().fit_transform(X_new)
 
             predictions = {}
-            for model_name, model in st.session_state["models"].items():
-                if model is not None:
-                    y_pred_new = model.predict(X_new_scaled)
+            for model_name, metrics in st.session_state["average_metrics"].items():
+                if model_name in st.session_state["models"] and st.session_state["models"][model_name] is not None:
+                    y_pred_new = st.session_state["models"][model_name].predict(X_new_scaled)
                     predictions[model_name] = y_pred_new
 
             pred_df = pd.DataFrame(predictions, index=X_new.index)
@@ -607,7 +498,7 @@ def load_and_predict_new_data():
         st.warning("No file selected!")
 
 # Main UI
-st.title("💡 Petrophysical Property Predictor")
+st.title("🧪 Petrophysical Property Predictor")
 
 # Execute the selected function
 if st.session_state.menu_choice == "Load File":
