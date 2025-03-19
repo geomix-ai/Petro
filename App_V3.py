@@ -308,35 +308,77 @@ def plot_correlation_matrix():
         st.warning("⚠ No logs selected!")
         return
 
-    for i, df in enumerate(st.session_state["cleaned_dfs"]):
-        st.subheader(f"Well {i+1} Correlation Matrix and Selected Input Logs")
-        input_logs = st.session_state["input_logs"][i]
+    # Let the user choose a well
+    well_options = [f"Well {i+1}" for i in range(len(st.session_state["cleaned_dfs"]))]
+    selected_well = st.selectbox(
+        "Select a well to plot the correlation matrix:",
+        well_options,
+        key="correlation_matrix_well_selectbox"
+    )
+    well_index = well_options.index(selected_well)
 
-        if input_logs:
-            corr_matrix = df[input_logs].corr()
+    # Get the data for the selected well
+    df = st.session_state["cleaned_dfs"][well_index]
+    input_logs = st.session_state["input_logs"][well_index]
 
-            high_corr = set()
-            for j in range(len(corr_matrix.columns)):
-                for k in range(j):
-                    if abs(corr_matrix.iloc[j, k]) > 0.8:
-                        high_corr.add(corr_matrix.columns[j])
+    if input_logs:
+        st.subheader(f"{selected_well} Correlation Matrix and Selected Input Logs")
 
-            st.session_state["updated_X"] = df[input_logs].drop(columns=high_corr)
+        # Calculate the correlation matrix
+        corr_matrix = df[input_logs].corr()
 
-            fig_corr, ax_corr = plt.subplots(figsize=(6, 4))
-            sns.heatmap(corr_matrix, annot=True, ax=ax_corr, cmap="coolwarm")
-            ax_corr.set_title("Correlation Matrix")
+        # Highlight highly correlated features (above +/- 0.8)
+        high_corr = set()
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i):
+                if abs(corr_matrix.iloc[i, j]) > 0.8:
+                    high_corr.add(corr_matrix.columns[i])
+                    high_corr.add(corr_matrix.columns[j])
+
+        # Show a hint about correlated features
+        if high_corr:
+            st.warning(f"⚠ Highly correlated features (above +/- 0.8): {', '.join(high_corr)}. Consider removing one of them.")
+
+        # Let the user manually remove unwanted logs
+        logs_to_remove = st.multiselect(
+            "Select logs to remove (optional):",
+            input_logs,
+            default=list(high_corr),  # Suggest highly correlated logs for removal
+            key=f"logs_to_remove_multiselect_{well_index}"
+        )
+
+        # Update the input logs by removing the selected logs
+        updated_input_logs = [log for log in input_logs if log not in logs_to_remove]
+
+        # Plot the updated correlation matrix
+        if updated_input_logs:
+            updated_corr_matrix = df[updated_input_logs].corr()
+
+            # Plot the correlation matrix
+            fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
+            sns.heatmap(updated_corr_matrix, annot=True, ax=ax_corr, cmap="coolwarm", vmin=-1, vmax=1)
+            ax_corr.set_title(f"{selected_well} - Correlation Matrix")
             st.pyplot(fig_corr)
 
-            fig, axes = plt.subplots(nrows=1, ncols=len(st.session_state["updated_X"].columns), figsize=(10, 10))
-            for j, col in enumerate(st.session_state["updated_X"].columns):
-                axes[j].plot(st.session_state["updated_X"][col], st.session_state["updated_X"].index, label=col)
-                axes[j].set_ylim(st.session_state["updated_X"].index.max(), st.session_state["updated_X"].index.min())
-                axes[j].set_xlabel(col)
-                axes[j].set_ylabel("Depth")
-                axes[j].grid()
+            # Plot the selected input logs
+            st.subheader(f"{selected_well} - Selected Input Logs")
+            fig, axes = plt.subplots(nrows=1, ncols=len(updated_input_logs), figsize=(15, 5))
+            for i, col in enumerate(updated_input_logs):
+                axes[i].plot(df[col], df.index, label=col)
+                axes[i].set_ylim(df.index.max(), df.index.min())
+                axes[i].set_xlabel(col)
+                axes[i].set_ylabel("Depth")
+                axes[i].grid()
             plt.tight_layout()
             st.pyplot(fig)
+
+            # Update the input logs in the session state
+            st.session_state["input_logs"][well_index] = updated_input_logs
+            st.success(f"Updated input logs for {selected_well}: {updated_input_logs}")
+        else:
+            st.warning("⚠ No logs selected after removal!")
+    else:
+        st.warning("⚠ No logs selected for this well!")
 
 # Train Models and Show Predictions for each well
 def train_models_and_show_predictions():
