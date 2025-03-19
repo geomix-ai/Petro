@@ -322,7 +322,7 @@ def plot_correlation_matrix():
     input_logs = st.session_state["input_logs"][well_index]
 
     if input_logs:
-        st.subheader(f"{selected_well} Correlation Matrix and Selected Input Logs")
+        st.subheader(f"{selected_well} Correlation Matrix")
 
         # Calculate the correlation matrix
         corr_matrix = df[input_logs].corr()
@@ -335,11 +335,20 @@ def plot_correlation_matrix():
                     high_corr.add(corr_matrix.columns[i])
                     high_corr.add(corr_matrix.columns[j])
 
+        # Plot the correlation matrix
+        fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
+        sns.heatmap(corr_matrix, annot=True, ax=ax_corr, cmap="coolwarm", vmin=-1, vmax=1)
+        ax_corr.set_title(f"{selected_well} - Correlation Matrix")
+        st.pyplot(fig_corr)
+
         # Show a hint about correlated features
         if high_corr:
             st.warning(f"⚠ Highly correlated features (above +/- 0.8): {', '.join(high_corr)}. Consider removing one of them.")
+        else:
+            st.success("No highly correlated features found (above +/- 0.8).")
 
         # Let the user manually remove unwanted logs
+        st.subheader(f"{selected_well} - Manually Remove Unwanted Logs")
         logs_to_remove = st.multiselect(
             "Select logs to remove (optional):",
             input_logs,
@@ -350,18 +359,9 @@ def plot_correlation_matrix():
         # Update the input logs by removing the selected logs
         updated_input_logs = [log for log in input_logs if log not in logs_to_remove]
 
-        # Plot the updated correlation matrix
+        # Plot the selected input logs after removal
         if updated_input_logs:
-            updated_corr_matrix = df[updated_input_logs].corr()
-
-            # Plot the correlation matrix
-            fig_corr, ax_corr = plt.subplots(figsize=(8, 6))
-            sns.heatmap(updated_corr_matrix, annot=True, ax=ax_corr, cmap="coolwarm", vmin=-1, vmax=1)
-            ax_corr.set_title(f"{selected_well} - Correlation Matrix")
-            st.pyplot(fig_corr)
-
-            # Plot the selected input logs
-            st.subheader(f"{selected_well} - Selected Input Logs")
+            st.subheader(f"{selected_well} - Selected Input Logs After Removal")
             fig, axes = plt.subplots(nrows=1, ncols=len(updated_input_logs), figsize=(15, 5))
             for i, col in enumerate(updated_input_logs):
                 axes[i].plot(df[col], df.index, label=col)
@@ -379,7 +379,7 @@ def plot_correlation_matrix():
             st.warning("⚠ No logs selected after removal!")
     else:
         st.warning("⚠ No logs selected for this well!")
-
+        
 # Train Models and Show Predictions for each well
 def train_models_and_show_predictions():
     if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
