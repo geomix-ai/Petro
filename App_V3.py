@@ -205,11 +205,15 @@ def fix_logs():
     missing_values = [float(val.strip()) for val in missing_values.split(",")]
 
     cleaned_dfs = []
-    for df in st.session_state["dfs"]:
+    for i, df in enumerate(st.session_state["dfs"]):
         df.replace(missing_values, np.nan, inplace=True)
-        fill_method = st.selectbox("Choose method to fill missing values", ["Drop Rows", "Fill with Mean", "Fill with Median", "Interpolate"])
+        fill_method = st.selectbox(
+            "Choose method to fill missing values", 
+            ["Drop Rows", "Fill with Mean", "Fill with Median", "Interpolate"],
+            key=f"fill_method_selectbox_{i}"  # Unique key for each iteration
+        )
 
-        if st.button("Preview Changes"):
+        if st.button("Preview Changes", key=f"preview_button_{i}"):  # Unique key for each button
             st.write("Before Cleaning:")
             st.write(df.head())
 
@@ -228,12 +232,12 @@ def fix_logs():
     st.success("✔ Data cleaned successfully!")
     show_input_logs()
 
-    if st.button("Save Cleaned Logs"):
+    if st.button("Save Cleaned Logs", key="save_cleaned_logs_button"):  # Unique key
         st.session_state["cleaned_dfs"] = cleaned_dfs
         st.success("✔ Cleaned logs saved to session state!")
     else:
         st.warning("⚠ Cleaned logs not saved!")
-
+   
 # Select target and input logs for Training
 def select_training_data():
     if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
@@ -243,9 +247,17 @@ def select_training_data():
     st.write("### Select Training Data")
     combined_df = pd.concat(st.session_state["cleaned_dfs"], axis=0)
 
-    st.session_state["target_log"] = st.selectbox("Select Target Log:", combined_df.columns)
-    st.session_state["input_logs"] = st.multiselect("Select Input Logs:", combined_df.columns,
-                                                     default=[col for col in combined_df.columns if col != st.session_state["target_log"]])
+    st.session_state["target_log"] = st.selectbox(
+        "Select Target Log:", 
+        combined_df.columns,
+        key="target_log_selectbox"  # Unique key
+    )
+    st.session_state["input_logs"] = st.multiselect(
+        "Select Input Logs:", 
+        combined_df.columns,
+        default=[col for col in combined_df.columns if col != st.session_state["target_log"]],
+        key="input_logs_multiselect"  # Unique key
+    )
 
     if st.button("Confirm Selection"):
         if not st.session_state["target_log"] or not st.session_state["input_logs"]:
@@ -342,46 +354,101 @@ def train_models_and_show_predictions():
     target_log = st.session_state["target_log"]
 
     if st.session_state["cleaned_dfs"] and input_logs and target_log:
-        model_name = st.selectbox("Choose Model", list(st.session_state["models"].keys()))
+        model_name = st.selectbox(
+            "Choose Model", 
+            list(st.session_state["models"].keys()),
+            key="model_selectbox"  # Unique key
+        )
 
         # Set Hyperparameters
         param_grid = {}
         if model_name == "Linear Regression":
             model = LinearRegression()
         elif model_name == "Random Forest":
-            n_estimators = st.slider("Number of Trees", 10, 200, 100)
-            max_depth = st.slider("Max Depth", 1, 20, 10)
+            n_estimators = st.slider(
+                "Number of Trees", 10, 200, 100, 
+                key="rf_n_estimators_slider"  # Unique key
+            )
+            max_depth = st.slider(
+                "Max Depth", 1, 20, 10, 
+                key="rf_max_depth_slider"  # Unique key
+            )
             model = RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth, random_state=42)
             param_grid = {"n_estimators": range(10, 200, 10), "max_depth": range(1, 20)}
         elif model_name == "Neural Network":
-            hidden_layer_sizes = st.text_input("Hidden Layer Sizes (e.g., 64,64)", "64,64")
-            max_iter = st.slider("Max Iterations", 100, 1000, 100)
-            model = MLPRegressor(hidden_layer_sizes=tuple(map(int, hidden_layer_sizes.split(','))), max_iter=max_iter, random_state=42)
-            param_grid = {"hidden_layer_sizes": [(64,), (128,), (64, 64), (128, 128)], "max_iter": range(100, 1000, 100)}
+            hidden_layer_sizes = st.text_input(
+                "Hidden Layer Sizes (e.g., 64,64)", 
+                "64,64", 
+                key="nn_hidden_layer_sizes_input"  # Unique key
+            )
+            max_iter = st.slider(
+                "Max Iterations", 100, 1000, 100, 
+                key="nn_max_iter_slider"  # Unique key
+            )
+            model = MLPRegressor(
+                hidden_layer_sizes=tuple(map(int, hidden_layer_sizes.split(','))), 
+                max_iter=max_iter, 
+                random_state=42
+            )
+            param_grid = {
+                "hidden_layer_sizes": [(64,), (128,), (64, 64), (128, 128)], 
+                "max_iter": range(100, 1000, 100)
+            }
         elif model_name == "XGBoost":
-            learning_rate = st.slider("Learning Rate", 0.01, 0.3, 0.1)
-            n_estimators = st.slider("Number of Trees", 10, 200, 100)
-            max_depth = st.slider("Max Depth", 1, 20, 6)
-            model = xgb.XGBRegressor(learning_rate=learning_rate, n_estimators=n_estimators, max_depth=max_depth, random_state=42)
+            learning_rate = st.slider(
+                "Learning Rate", 0.01, 0.3, 0.1, 
+                key="xgb_learning_rate_slider"  # Unique key
+            )
+            n_estimators = st.slider(
+                "Number of Trees", 10, 200, 100, 
+                key="xgb_n_estimators_slider"  # Unique key
+            )
+            max_depth = st.slider(
+                "Max Depth", 1, 20, 6, 
+                key="xgb_max_depth_slider"  # Unique key
+            )
+            model = xgb.XGBRegressor(
+                learning_rate=learning_rate, 
+                n_estimators=n_estimators, 
+                max_depth=max_depth, 
+                random_state=42
+            )
             param_grid = {
                 "learning_rate": np.linspace(0.01, 0.3, 10),
                 "n_estimators": range(10, 200, 10),
                 "max_depth": range(1, 20)
             }
         elif model_name == "SVR":
-            kernel = st.text_input("Kernel (e.g., 'rbf', 'linear')", "rbf")
-            C = st.slider("C (Regularization parameter)", 0.1, 10.0, 1.0)
-            gamma = st.text_input("Gamma (Kernel coefficient)", "scale")
+            kernel = st.text_input(
+                "Kernel (e.g., 'rbf', 'linear')", 
+                "rbf", 
+                key="svr_kernel_input"  # Unique key
+            )
+            C = st.slider(
+                "C (Regularization parameter)", 0.1, 10.0, 1.0, 
+                key="svr_c_slider"  # Unique key
+            )
+            gamma = st.text_input(
+                "Gamma (Kernel coefficient)", 
+                "scale", 
+                key="svr_gamma_input"  # Unique key
+            )
             model = SVR(kernel=kernel, C=C, gamma=gamma)
             param_grid = {"C": np.linspace(0.1, 10, 10), "gamma": ["scale", "auto"]}
         elif model_name == "KNN":
-            n_neighbors = st.slider("Number of Neighbors", 1, 20, 5)
+            n_neighbors = st.slider(
+                "Number of Neighbors", 1, 20, 5, 
+                key="knn_n_neighbors_slider"  # Unique key
+            )
             model = KNeighborsRegressor(n_neighbors=n_neighbors)
             param_grid = {"n_neighbors": range(1, 20)}
 
-        use_random_search = st.checkbox("Use RandomizedSearchCV for Hyperparameter Tuning")
+        use_random_search = st.checkbox(
+            "Use RandomizedSearchCV for Hyperparameter Tuning", 
+            key="use_random_search_checkbox"  # Unique key
+        )
 
-        if st.button("Train Model"):
+        if st.button("Train Model", key="train_model_button"):  # Unique key
             with st.spinner("Training in progress..."):
                 combined_df = pd.concat(st.session_state["cleaned_dfs"], axis=0)
                 X = st.session_state["updated_X"].dropna() if st.session_state["updated_X"] is not None else combined_df[input_logs].dropna()
@@ -457,7 +524,7 @@ def train_models_and_show_predictions():
                 col4.metric("RMSE (Testing)", f"{metrics_data['RMSE'][1]:.2f}")
 
                 # Save Model
-                if st.button("Save Model"):
+                if st.button("Save Model", key="save_model_button"):  # Unique key
                     try:
                         model_path = f"{model_name}_model.pkl"
                         with open(model_path, "wb") as file:
