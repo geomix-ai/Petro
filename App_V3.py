@@ -50,8 +50,8 @@ if "menu_choice" not in st.session_state:
     st.session_state.menu_choice = "Home"  # Default to Home page
 
 # Initialize session state for global variables
-if "dfs" not in st.session_state:
-    st.session_state["dfs"] = []
+if "df" not in st.session_state:
+    st.session_state["df"] = None
 if "target_log" not in st.session_state:
     st.session_state["target_log"] = None
 if "input_logs" not in st.session_state:
@@ -67,8 +67,8 @@ if "models" not in st.session_state:
     }
 if "updated_X" not in st.session_state:
     st.session_state["updated_X"] = None
-if "cleaned_dfs" not in st.session_state:
-    st.session_state["cleaned_dfs"] = []
+if "cleaned_df" not in st.session_state:
+    st.session_state["cleaned_df"] = None
 
 # Home / Introduction Page
 if st.session_state.menu_choice == "Home":
@@ -79,7 +79,7 @@ if st.session_state.menu_choice == "Home":
 
     1. **Load Data:** Upload LAS or CSV files containing well log data using the `Load File` button.
     2. **View & Clean Logs:** Fix missing values and outliers through `Show Input Logs` and `Fix Logs`.
-    3. **Select Training Data:** Choose the target log and input logs for model trainin.
+    3. **Select Training Data:** Choose the target log and input logs for model training.
     4. **Visualize & Analyze Data:** using histograms and correlation matrices.
     5. **Train Machine Learning Models:** Select ML models, tune hyperparameters, train and evaluate their performance.
     6. **Use Trained Models & Predict New Data:** Load new well logs and make predictions using the trained models.
@@ -87,161 +87,155 @@ if st.session_state.menu_choice == "Home":
     Navigate through the menu on the left to access different functionalities.
     """)
 
-
 # Load LAS or CSV files
 def load_file():
-    uploaded_files = st.file_uploader("Upload LAS or CSV files", type=["las", "csv"], accept_multiple_files=True)
+    uploaded_file = st.file_uploader("Upload LAS or CSV file", type=["las", "csv"])
 
-    if not uploaded_files:
+    if not uploaded_file:
         st.warning("No file uploaded yet!")
         return
 
-    st.session_state["dfs"] = []
-    for uploaded_file in uploaded_files:
-        try:
-            if uploaded_file.size > 200 * 1024 * 1024:  # 200 MB limit
-                st.error(f"File {uploaded_file.name} is too large! Max size is 200 MB.")
-                continue
+    try:
+        if uploaded_file.size > 200 * 1024 * 1024:  # 200 MB limit
+            st.error(f"File {uploaded_file.name} is too large! Max size is 200 MB.")
+            return
 
-            if uploaded_file.name.endswith(".las"):
-                las = lasio.read(io.StringIO(uploaded_file.getvalue().decode("utf-8", errors="ignore")))
-                temp_df = las.df()
-            elif uploaded_file.name.endswith(".csv"):
-                temp_df = pd.read_csv(uploaded_file, index_col=0)
-            else:
-                st.error(f"Unsupported file format: {uploaded_file.name}")
-                continue
+        if uploaded_file.name.endswith(".las"):
+            las = lasio.read(io.StringIO(uploaded_file.getvalue().decode("utf-8", errors="ignore")))
+            temp_df = las.df()
+        elif uploaded_file.name.endswith(".csv"):
+            temp_df = pd.read_csv(uploaded_file, index_col=0)
+        else:
+            st.error(f"Unsupported file format: {uploaded_file.name}")
+            return
 
-            st.session_state["dfs"].append(temp_df)
-            st.success(f"Loaded: {uploaded_file.name} ({len(temp_df)} rows)")
+        st.session_state["df"] = temp_df
+        st.success(f"Loaded: {uploaded_file.name} ({len(temp_df)} rows)")
 
-        except Exception as e:
-            st.error(f"Error loading {uploaded_file.name}: {e}")
+    except Exception as e:
+        st.error(f"Error loading {uploaded_file.name}: {e}")
 
 # Show input logs with interactive and colorful plots
 def show_input_logs():
-    if "dfs" in st.session_state and st.session_state["dfs"]:
-        for i, df in enumerate(st.session_state["dfs"]):
-            st.subheader(f"Well {i+1} Logs")
+    if "df" in st.session_state and st.session_state["df"] is not None:
+        df = st.session_state["df"]
+        st.subheader("Well Logs")
 
-            # Create subplots with separate tracks for each log
-            fig = make_subplots(
-                rows=1,
-                cols=len(df.columns),
-                shared_yaxes=True,
-                horizontal_spacing=0.02,
-                subplot_titles=df.columns
+        # Create subplots with separate tracks for each log
+        fig = make_subplots(
+            rows=1,
+            cols=len(df.columns),
+            shared_yaxes=True,
+            horizontal_spacing=0.02,
+            subplot_titles=df.columns
+        )
+
+        for j, col in enumerate(df.columns):
+            min_val = df[col].min()
+
+            # Fill from log's minimum value to the log value
+            fig.add_trace(
+                go.Scatter(
+                    x=[min_val]*len(df.index),
+                    y=df.index,
+                    mode='lines',
+                    line=dict(color='red', width=0),  # Transparent line
+                    showlegend=False,
+                ),
+                row=1,
+                col=j+1
             )
 
-            for j, col in enumerate(df.columns):
-                min_val = df[col].min()
+            fig.add_trace(
+                go.Scatter(
+                    x=df[col],
+                    y=df.index,
+                    mode='lines',
+                    name=col,
+                    line=dict(color='red', width=1),
+                    fill='tonextx',
+                    fillcolor='rgba(255, 0, 0, 0.3)',  # Semi-transparent red fill
+                ),
+                row=1,
+                col=j+1
+            )
 
-                # Fill from log's minimum value to the log value
-                fig.add_trace(
-                    go.Scatter(
-                        x=[min_val]*len(df.index),
-                        y=df.index,
-                        mode='lines',
-                        line=dict(color='red', width=0),  # Transparent line
-                        showlegend=False,
-                    ),
-                    row=1,
-                    col=j+1
-                )
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=df[col],
-                        y=df.index,
-                        mode='lines',
-                        name=col,
-                        line=dict(color='black', width=1),
-                        fill='tonextx',
-                        fillcolor='rgba(128, 128, 128, 0.3)',  # Semi-transparent grey fill
-                    ),
-                    row=1,
-                    col=j+1
-                )
-
-                # Update each x-axis with fine grid
-                fig.update_xaxes(
-                    title_text=col,
-                    row=1,
-                    col=j+1,
-                    showgrid=True,
-                    gridwidth=0.5,
-                    gridcolor='gray'
-                )
-
-            # General layout updates
-            fig.update_yaxes(
-                title="Depth (m)",
-                autorange="reversed",
+            # Update each x-axis with fine grid
+            fig.update_xaxes(
+                title_text=col,
+                row=1,
+                col=j+1,
                 showgrid=True,
                 gridwidth=0.5,
                 gridcolor='gray'
             )
 
-            fig.update_layout(
-                height=1000,  # Increase height for deep wells
-                width=300 * len(df.columns),  # Adjust width dynamically
-                title=f"Well {i+1} - Log Visualization",
-                template="plotly_white",
-                hovermode="y unified"
-            )
+        # General layout updates
+        fig.update_yaxes(
+            title="Depth (m)",
+            autorange="reversed",
+            showgrid=True,
+            gridwidth=0.5,
+            gridcolor='gray'
+        )
 
-            st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(
+            height=1000,  # Increase height for deep wells
+            width=300 * len(df.columns),  # Adjust width dynamically
+            title="Well Log Visualization",
+            template="plotly_white",
+            hovermode="y unified"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
 
     else:
         st.warning("No data loaded!")
 
 # Fix missing values
 def fix_logs():
-    if "dfs" not in st.session_state or not st.session_state["dfs"]:
+    if "df" not in st.session_state or st.session_state["df"] is None:
         st.warning("⚠ No data loaded!")
         return
 
     missing_values = st.text_input("Enter missing values to replace (comma separated, e.g., -999.25, -999)", "-999.25,-999,-9999")
     missing_values = [float(val.strip()) for val in missing_values.split(",")]
 
-    cleaned_dfs = []
-    for df in st.session_state["dfs"]:
-        df.replace(missing_values, np.nan, inplace=True)
-        fill_method = st.selectbox("Choose method to fill missing values", ["Drop Rows", "Fill with Mean", "Fill with Median", "Interpolate"])
+    df = st.session_state["df"]
+    df.replace(missing_values, np.nan, inplace=True)
+    fill_method = st.selectbox("Choose method to fill missing values", ["Drop Rows", "Fill with Mean", "Fill with Median", "Interpolate"])
 
-        if st.button("Preview Changes"):
-            st.write("Before Cleaning:")
-            st.write(df.head())
+    if st.button("Preview Changes"):
+        st.write("Before Cleaning:")
+        st.write(df.head())
 
-        if fill_method == "Drop Rows":
-            df.dropna(inplace=True)
-        elif fill_method == "Fill with Mean":
-            df.fillna(df.mean(), inplace=True)
-        elif fill_method == "Fill with Median":
-            df.fillna(df.median(), inplace=True)
-        elif fill_method == "Interpolate":
-            df.interpolate(inplace=True)
+    if fill_method == "Drop Rows":
+        df.dropna(inplace=True)
+    elif fill_method == "Fill with Mean":
+        df.fillna(df.mean(), inplace=True)
+    elif fill_method == "Fill with Median":
+        df.fillna(df.median(), inplace=True)
+    elif fill_method == "Interpolate":
+        df.interpolate(inplace=True)
 
-        cleaned_dfs.append(df)
-
-    st.session_state["cleaned_dfs"] = cleaned_dfs
+    st.session_state["cleaned_df"] = df
     st.success("✔ Data cleaned successfully!")
     show_input_logs()
 
     if st.button("Save Cleaned Logs"):
-        st.session_state["cleaned_dfs"] = cleaned_dfs
+        st.session_state["cleaned_df"] = df
         st.success("✔ Cleaned logs saved to session state!")
     else:
         st.warning("⚠ Cleaned logs not saved!")
 
 # Select target and input logs for Training
 def select_training_data():
-    if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
+    if "cleaned_df" not in st.session_state or st.session_state["cleaned_df"] is None:
         st.warning("⚠ No cleaned data available!")
         return
 
     st.write("### Select Training Data")
-    df = st.session_state["cleaned_dfs"][0]
+    df = st.session_state["cleaned_df"]
 
     st.session_state["target_log"] = st.selectbox("Select Target Log:", df.columns)
     st.session_state["input_logs"] = st.multiselect("Select Input Logs:", df.columns,
@@ -262,22 +256,22 @@ def plot_histograms():
     input_logs = st.session_state["input_logs"]
     target_log = st.session_state["target_log"]
 
-    if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
+    if "cleaned_df" not in st.session_state or st.session_state["cleaned_df"] is None:
         st.warning("⚠ No cleaned data available!")
         return
 
     if input_logs and target_log:
         st.write("### Histograms")
-        combined_df = pd.concat(st.session_state["cleaned_dfs"], axis=0)
+        df = st.session_state["cleaned_df"]
         fig, axes = plt.subplots(nrows=1, ncols=len(input_logs) + 1, figsize=(25, 5))
 
         for i, col in enumerate(input_logs):
-            if col in combined_df.columns:
-                axes[i].hist(combined_df[col].dropna(), bins=30, edgecolor='black')
+            if col in df.columns:
+                axes[i].hist(df[col].dropna(), bins=30, edgecolor='black')
                 axes[i].set_title(col)
 
-        if target_log in combined_df.columns:
-            axes[-1].hist(combined_df[target_log].dropna(), bins=30, edgecolor='black', color='red')
+        if target_log in df.columns:
+            axes[-1].hist(df[target_log].dropna(), bins=30, edgecolor='black', color='red')
             axes[-1].set_title(target_log)
 
         plt.tight_layout()
@@ -287,7 +281,7 @@ def plot_histograms():
 
 # Plot correlation matrix and update X data
 def plot_correlation_matrix():
-    if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
+    if "cleaned_df" not in st.session_state or st.session_state["cleaned_df"] is None:
         st.warning("⚠ No cleaned data available!")
         return
 
@@ -296,11 +290,11 @@ def plot_correlation_matrix():
         return
 
     input_logs = st.session_state["input_logs"]
-    combined_df = pd.concat(st.session_state["cleaned_dfs"], axis=0)
+    df = st.session_state["cleaned_df"]
 
     if input_logs:
         st.write("### Correlation Matrix and Selected Input Logs")
-        corr_matrix = combined_df[input_logs].corr()
+        corr_matrix = df[input_logs].corr()
 
         high_corr = set()
         for i in range(len(corr_matrix.columns)):
@@ -308,7 +302,7 @@ def plot_correlation_matrix():
                 if abs(corr_matrix.iloc[i, j]) > 0.8:
                     high_corr.add(corr_matrix.columns[i])
 
-        st.session_state["updated_X"] = combined_df[input_logs].drop(columns=high_corr)
+        st.session_state["updated_X"] = df[input_logs].drop(columns=high_corr)
 
         fig_corr, ax_corr = plt.subplots(figsize=(6, 4))
         sns.heatmap(corr_matrix, annot=True, ax=ax_corr, cmap="coolwarm")
@@ -330,7 +324,7 @@ def plot_correlation_matrix():
 
 # Train Models and Show Predictions
 def train_models_and_show_predictions():
-    if "cleaned_dfs" not in st.session_state or not st.session_state["cleaned_dfs"]:
+    if "cleaned_df" not in st.session_state or st.session_state["cleaned_df"] is None:
         st.warning("⚠ No cleaned data available!")
         return
 
@@ -341,7 +335,7 @@ def train_models_and_show_predictions():
     input_logs = st.session_state["input_logs"]
     target_log = st.session_state["target_log"]
 
-    if st.session_state["cleaned_dfs"] and input_logs and target_log:
+    if st.session_state["cleaned_df"] is not None and input_logs and target_log:
         model_name = st.selectbox("Choose Model", list(st.session_state["models"].keys()))
 
         # Set Hyperparameters
@@ -383,9 +377,9 @@ def train_models_and_show_predictions():
 
         if st.button("Train Model"):
             with st.spinner("Training in progress..."):
-                combined_df = pd.concat(st.session_state["cleaned_dfs"], axis=0)
-                X = st.session_state["updated_X"].dropna() if st.session_state["updated_X"] is not None else combined_df[input_logs].dropna()
-                y = combined_df[target_log].dropna()
+                df = st.session_state["cleaned_df"]
+                X = st.session_state["updated_X"].dropna() if st.session_state["updated_X"] is not None else df[input_logs].dropna()
+                y = df[target_log].dropna()
 
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
                 scaler = StandardScaler()
@@ -461,7 +455,7 @@ def train_models_and_show_predictions():
                     try:
                         model_path = f"{model_name}_model.pkl"
                         with open(model_path, "wb") as file:
-                            pickle.dump(model, file)
+                            joblib.dump(model, file)
                         st.session_state["model_saved"] = True
                         st.session_state["model_path"] = model_path
                     except Exception as e:
@@ -512,16 +506,23 @@ def load_and_predict_new_data():
             st.pyplot(fig)
 
             st.write("Predicted Log")
-            fig, ax = plt.subplots(figsize=(20, 5))
+            fig = go.Figure()
             for model_name in pred_df.columns:
                 if model_name != "Depth":
-                    ax.plot(pred_df["Depth"], pred_df[model_name], label=model_name)
-            ax.set_xlabel("Depth")
-            ax.set_ylabel("Predicted Values")
-            ax.set_title("Predicted Log")
-            ax.legend()
-            ax.grid()
-            st.pyplot(fig)
+                    fig.add_trace(go.Scatter(
+                        x=pred_df["Depth"],
+                        y=pred_df[model_name],
+                        mode='lines',
+                        name=model_name
+                    ))
+            fig.update_layout(
+                xaxis_title="Depth",
+                yaxis_title="Predicted Values",
+                title="Predicted Log",
+                legend_title="Model",
+                template="plotly_white"
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
             if st.button("Export Results"):
                 export_path = st.text_input("Enter file path to save results (e.g., results.las or results.csv)")
