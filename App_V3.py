@@ -223,19 +223,20 @@ def fix_logs():
     show_input_logs()
 
     # Save Cleaned Logs with Depth Interval Selection
-    if st.button("Save Cleaned Logs"):
-        save_option = st.radio("Save Option", ["Entire Logs", "Specific Depth Interval"])
+    save_option = st.radio("Save Option", ["Entire Logs", "Specific Depth Interval"])
 
-        if save_option == "Specific Depth Interval":
-            depth_min = st.number_input("Enter Minimum Depth", value=df.index.min())
-            depth_max = st.number_input("Enter Maximum Depth", value=df.index.max())
-            if depth_min >= depth_max:
-                st.error("Minimum depth must be less than maximum depth!")
-            else:
+    if save_option == "Specific Depth Interval":
+        depth_min = st.number_input("Enter Minimum Depth", value=float(df.index.min()))
+        depth_max = st.number_input("Enter Maximum Depth", value=float(df.index.max()))
+        if depth_min >= depth_max:
+            st.error("Minimum depth must be less than maximum depth!")
+        else:
+            if st.button("Save Cleaned Logs"):
                 cleaned_df = df[(df.index >= depth_min) & (df.index <= depth_max)]
                 st.session_state["cleaned_df"] = cleaned_df
                 st.success(f"✔ Cleaned logs saved for depth interval {depth_min} to {depth_max}!")
-        else:
+    else:
+        if st.button("Save Cleaned Logs"):
             st.session_state["cleaned_df"] = df
             st.success("✔ Cleaned logs saved for the entire depth range!")
 
