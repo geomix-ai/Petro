@@ -480,8 +480,6 @@ def train_models_and_show_predictions():
         st.warning("⚠ No data or logs selected!")
 
 # Load and predict new data
-import io
-
 def load_and_predict_new_data():
     uploaded_file = st.file_uploader("Upload new LAS or CSV file", type=["las", "csv"])
     if uploaded_file:
@@ -538,29 +536,14 @@ def load_and_predict_new_data():
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            # Export Results as a downloadable link
+            # Export Results as a downloadable CSV file
             st.write("### Export Results")
-            export_format = st.radio("Select export format", [".las", ".csv"])
-
-            if export_format == ".las":
-                # Create a LAS file in memory
-                las = lasio.LASFile()
-                las.set_data_from_df(pred_df)
-                # Write the LAS file to a StringIO object
-                buffer = io.StringIO()
-                las.write(buffer)
-                buffer.seek(0)  # Reset the buffer position to the beginning
-                # Encode the string to bytes
-                export_data = buffer.getvalue().encode("utf-8")
-                file_name = "Results.las"
-                mime_type = "application/octet-stream"
-            else:
-                export_data = pred_df.to_csv(index=False)
-                file_name = "Results.csv"
-                mime_type = "text/csv"
+            export_data = pred_df.to_csv(index=False)
+            file_name = "Results.csv"
+            mime_type = "text/csv"
 
             st.download_button(
-                label="Download Results",
+                label="Download Results as CSV",
                 data=export_data,
                 file_name=file_name,
                 mime=mime_type
