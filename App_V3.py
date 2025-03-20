@@ -545,11 +545,10 @@ def load_and_predict_new_data():
                 las = lasio.LASFile()
                 las.set_data_from_df(pred_df)
                 # Write the LAS file to a StringIO object
-                buffer = io.StringIO()
+                buffer = io.BytesIO()
                 las.write(buffer)
                 buffer.seek(0)  # Reset the buffer position to the beginning
-                # Encode the string to bytes
-                export_data = buffer.getvalue().encode("utf-8")
+                export_data = buffer.getvalue()
                 file_name = "Results.las"
                 mime_type = "application/octet-stream"
             else:
