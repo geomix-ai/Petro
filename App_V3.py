@@ -1,7 +1,5 @@
 import streamlit as st
-from streamlit_file_browser import st_file_browser
 import io
-import os
 import lasio
 import pandas as pd
 import numpy as np
@@ -538,31 +536,25 @@ def load_and_predict_new_data():
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            # Export Results using streamlit-file-browser
-            if st.button("Export Results"):
-                st.write("Select a folder and enter a file name to save the results:")
+            # Export Results as a downloadable link
+            st.write("### Export Results")
+            export_format = st.radio("Select export format", [".las", ".csv"])
 
-                # Set the initial path for the file browser
-                initial_path = os.getcwd()  # Use the current working directory as the initial path
-                selected_path = st_file_browser(path=initial_path)
+            if export_format == ".las":
+                las = lasio.LASFile()
+                las.set_data_from_df(pred_df)
+                export_data = las.write()
+                file_name = "Results.las"
+            else:
+                export_data = pred_df.to_csv(index=False)
+                file_name = "Results.csv"
 
-                if selected_path:
-                    file_name = st.text_input("Enter file name (e.g., Results.las or Results.csv)")
-                    if file_name:
-                        if not file_name.endswith((".las", ".csv")):
-                            st.error("Invalid file format! Use .las or .csv.")
-                        else:
-                            export_path = os.path.join(selected_path, file_name)
-                            try:
-                                if file_name.endswith(".las"):
-                                    las = lasio.LASFile()
-                                    las.set_data_from_df(pred_df)
-                                    las.write(export_path)
-                                elif file_name.endswith(".csv"):
-                                    pred_df.to_csv(export_path, index=False)
-                                st.success(f"Results exported successfully to {export_path}!")
-                            except Exception as e:
-                                st.error(f"Error exporting results: {e}")
+            st.download_button(
+                label="Download Results",
+                data=export_data,
+                file_name=file_name,
+                mime="text/csv" if export_format == ".csv" else "application/octet-stream"
+            )
     else:
         st.warning("No file selected!")
         
