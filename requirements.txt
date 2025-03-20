@@ -1,11 +1,10 @@
 streamlit
-streamlit-file-browser
 lasio
 pandas
 numpy
 plotly
 xgboost
 scikit-learn
-matplotlib
 seaborn
 joblib
+matplotlib
