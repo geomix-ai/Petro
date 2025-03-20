@@ -1,4 +1,5 @@
 streamlit
+streamlit-file-browser
 lasio
 pandas
 numpy
