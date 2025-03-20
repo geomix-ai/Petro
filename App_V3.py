@@ -536,22 +536,26 @@ def load_and_predict_new_data():
             )
             st.plotly_chart(fig, use_container_width=True)
 
+            # Export Results
             if st.button("Export Results"):
-                export_path = st.text_input("Enter file path to save results (e.g., results.las or results.csv)")
+                export_path = st.text_input("Enter file path to save results (e.g., Results.las or Results.csv)")
                 if export_path:
-                    if not export_path.endswith((".las", ".csv")):
-                        st.error("Invalid file format! Use .las or .csv.")
-                    else:
-                        if export_path.endswith(".las"):
-                            las = lasio.LASFile()
-                            las.set_data_from_df(pred_df)
-                            las.write(export_path)
-                        elif export_path.endswith(".csv"):
-                            pred_df.to_csv(export_path, index=False)
-                        st.success("Results exported successfully!")
+                    try:
+                        if not export_path.endswith((".las", ".csv")):
+                            st.error("Invalid file format! Use .las or .csv.")
+                        else:
+                            if export_path.endswith(".las"):
+                                las = lasio.LASFile()
+                                las.set_data_from_df(pred_df)
+                                las.write(export_path)
+                            elif export_path.endswith(".csv"):
+                                pred_df.to_csv(export_path, index=False)
+                            st.success(f"Results exported successfully to {export_path}!")
+                    except Exception as e:
+                        st.error(f"Error exporting results: {e}")
     else:
         st.warning("No file selected!")
-
+        
 # Main UI
 st.title("💡 Petrophysical Property Predictor")
 
