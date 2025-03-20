@@ -541,19 +541,26 @@ def load_and_predict_new_data():
             export_format = st.radio("Select export format", [".las", ".csv"])
 
             if export_format == ".las":
+                # Create a LAS file in memory
                 las = lasio.LASFile()
                 las.set_data_from_df(pred_df)
-                export_data = las.write()
+                # Write the LAS file to a BytesIO object
+                buffer = io.BytesIO()
+                las.write(buffer)
+                buffer.seek(0)  # Reset the buffer position to the beginning
+                export_data = buffer.getvalue()
                 file_name = "Results.las"
+                mime_type = "application/octet-stream"
             else:
                 export_data = pred_df.to_csv(index=False)
                 file_name = "Results.csv"
+                mime_type = "text/csv"
 
             st.download_button(
                 label="Download Results",
                 data=export_data,
                 file_name=file_name,
-                mime="text/csv" if export_format == ".csv" else "application/octet-stream"
+                mime=mime_type
             )
     else:
         st.warning("No file selected!")
